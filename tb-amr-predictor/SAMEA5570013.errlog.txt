@@ -1,0 +1,40 @@
+# tb-profiler error report
+
+* OS: linux
+* Program version: 6.7.0
+* Database version: {'name': 'who_v2+', 'repo': 'git@github.com:jodyphelan/tbdb.git', 'branch': 'who_v2+', 'commit': '7fe4364e', 'status': 'modified', 'author': 'jodyphelan', 'date': 'Thu Mar 12 18:19:10 2026 +0100', 'db-schema-version': '2.1.0', 'tb-profiler-version': '>=6.6.0,<7.0.0'}
+* Program call:
+```
+{'logging': 'INFO', 'debug': False, 'read1': 'reads/ERR3287819_1.fastq.gz', 'read2': 'reads/ERR3287819_2.fastq.gz', 'bam': None, 'fasta': None, 'vcf': None, 'platform': 'illumina', 'db': 'who_v2+', 'external_db': None, 'prefix': 'SAMEA5570013', 'csv': False, 'txt': False, 'text_template': None, 'docx': False, 'docx_template': None, 'docx_plugin': None, 'add_columns': None, 'add_mutation_metadata': False, 'dir': '/mnt/c/Users/Pranav Kumar/Documents/GitHub/TB-antimicrobial-resistance-predictor/tb-amr-predictor/results', 'depth': '0,10', 'af': '0,0.1', 'strand': '0,3', 'sv_depth': '0,10', 'sv_af': '0.5,0.9', 'sv_len': '100000,50000', 'mapper': 'bwa', 'caller': 'freebayes', 'calling_params': None, 'kmer_counter': 'FastK', 'coverage_tool': 'samtools', 'suspect': False, 'spoligotype': False, 'call_whole_genome': False, 'snp_dist': None, 'snp_diff_db': None, 'snp_diff_no_store': False, 'no_trim': False, 'no_coverage_qc': False, 'no_samclip': False, 'no_delly': False, 'no_lineage': False, 'add_variant_annotations': False, 'threads': 4, 'ram': 2, 'implement_rules': False, 'snpeff_config': None, 'delly_vcf': None, 'supplementary_bam': None, 'low_dp_mask': None, 'save_low_dp_mask': False, 'consensus': False, 'db_dir': '/home/pranav1080/miniconda3/envs/tb/share/tbprofiler', 'no_clean': False, 'temp': '.', 'func': <function plugin_decorator.<locals>.wrapper at 0x7f5a61a68d30>, 'software_name': 'tbprofiler', 'version': '6.7.0', 'tmp_prefix': '93641183-33c8-478d-91ef-424808214342', 'files_prefix': '/mnt/c/Users/Pranav Kumar/Documents/GitHub/TB-antimicrobial-resistance-predictor/tb-amr-predictor/93641183-33c8-478d-91ef-424808214342', 'conf': {'db-schema-version': '2.1.0', 'snpEff_db': 'Mycobacterium_tuberculosis_h37rv_tbprofiler', 'drugs': ['rifampicin', 'rifapentine', 'isoniazid', 'ethambutol', 'pyrazinamide', 'moxifloxacin', 'levofloxacin', 'bedaquiline', 'delamanid', 'pretomanid', 'linezolid', 'streptomycin', 'amikacin', 'kanamycin', 'capreomycin', 'clofazimine', 'ethionamide', 'prothionamide', 'para-aminosalicylic_acid', 'cycloserine'], 'tb-profiler-version': '>=6.6.0,<7.0.0', 'type': 'reference', 'version': {'name': 'who_v2+', 'repo': 'git@github.com:jodyphelan/tbdb.git', 'branch': 'who_v2+', 'commit': '7fe4364e', 'status': 'modified', 'author': 'jodyphelan', 'date': 'Thu Mar 12 18:19:10 2026 +0100', 'db-schema-version': '2.1.0', 'tb-profiler-version': '>=6.6.0,<7.0.0'}, 'amplicon': False, 'files': {'snpEff_config': 'snpeff/snpEff.config', 'ref': 'genome.fasta', 'gff': 'genome.gff', 'bed': 'genes.bed', 'json_db': 'mutations.json', 'variables': 'variables.json', 'spoligotype_spacers': 'spoligotype_spacers.txt', 'spoligotype_annotations': 'spoligotype_list.csv', 'bedmask': 'mask.bed', 'rules': 'rules.yml', 'barcode': 'barcode.bed'}, 'snpEff_config': '/home/pranav1080/miniconda3/envs/tb/share/tbprofiler/who_v2+/snpeff/snpEff.config', 'ref': '/home/pranav1080/miniconda3/envs/tb/share/tbprofiler/who_v2+/genome.fasta', 'gff': '/home/pranav1080/miniconda3/envs/tb/share/tbprofiler/who_v2+/genome.gff', 'bed': '/home/pranav1080/miniconda3/envs/tb/share/tbprofiler/who_v2+/genes.bed', 'variables': {'db-schema-version': '2.1.0', 'snpEff_db': 'Mycobacterium_tuberculosis_h37rv_tbprofiler', 'drugs': ['rifampicin', 'rifapentine', 'isoniazid', 'ethambutol', 'pyrazinamide', 'moxifloxacin', 'levofloxacin', 'bedaquiline', 'delamanid', 'pretomanid', 'linezolid', 'streptomycin', 'amikacin', 'kanamycin', 'capreomycin', 'clofazimine', 'ethionamide', 'prothionamide', 'para-aminosalicylic_acid', 'cycloserine'], 'tb-profiler-version': '>=6.6.0,<7.0.0', 'type': 'reference', 'version': {'name': 'who_v2+', 'repo': 'git@github.com:jodyphelan/tbdb.git', 'branch': 'who_v2+', 'commit': '7fe4364e', 'status': 'modified', 'author': 'jodyphelan', 'date': 'Thu Mar 12 18:19:10 2026 +0100', 'db-schema-version': '2.1.0', 'tb-profiler-version': '>=6.6.0,<7.0.0'}, 'amplicon': False, 'files': {'snpEff_config': 'snpeff/snpEff.config', 'ref': 'genome.fasta', 'gff': 'genome.gff', 'bed': 'genes.bed', 'json_db': 'mutations.json', 'variables': 'variables.json', 'spoligotype_spacers': 'spoligotype_spacers.txt', 'spoligotype_annotations': 'spoligotype_list.csv', 'bedmask': 'mask.bed', 'rules': 'rules.yml', 'barcode': 'barcode.bed'}}, 'spoligotype_spacers': '/home/pranav1080/miniconda3/envs/tb/share/tbprofiler/who_v2+/spoligotype_spacers.txt', 'spoligotype_annotations': '/home/pranav1080/miniconda3/envs/tb/share/tbprofiler/who_v2+/spoligotype_list.csv', 'bedmask': '/home/pranav1080/miniconda3/envs/tb/share/tbprofiler/who_v2+/mask.bed', 'rules': '/home/pranav1080/miniconda3/envs/tb/share/tbprofiler/who_v2+/rules.yml', 'barcode': '/home/pranav1080/miniconda3/envs/tb/share/tbprofiler/who_v2+/barcode.bed', 'variant_filters': {'depth_hard': 0, 'depth_soft': 10, 'af_hard': 0, 'af_soft': 0.1, 'strand_hard': 0, 'strand_soft': 3, 'sv_depth_hard': 0, 'sv_depth_soft': 10, 'sv_af_hard': 0.5, 'sv_af_soft': 0.9, 'sv_len_hard': 100000, 'sv_len_soft': 50000}}, 'plugins': ['default'], 'run_delly': True, 'samclip': True, 'coverage_qc': True, 'data_source': 'fastq', 'call_lineage': True}
+```
+## Traceback:
+```
+  File "/home/pranav1080/miniconda3/envs/tb/bin/tb-profiler", line 755, in <module>
+    args.func(args)
+  File "/home/pranav1080/miniconda3/envs/tb/bin/tb-profiler", line 123, in wrapper
+    func(args)
+  File "/home/pranav1080/miniconda3/envs/tb/bin/tb-profiler", line 142, in main_profile
+    variants_profile = pp.run_profiler(args)
+  File "/home/pranav1080/miniconda3/envs/tb/lib/python3.10/site-packages/pathogenprofiler/cli.py", line 216, in run_profiler
+    args.bam = get_bam_file(args)
+  File "/home/pranav1080/miniconda3/envs/tb/lib/python3.10/site-packages/pathogenprofiler/cli.py", line 274, in get_bam_file
+    fastq_obj = untrimmed_fastq_obj.trim(args.files_prefix,threads=args.threads)
+  File "/home/pranav1080/miniconda3/envs/tb/lib/python3.10/site-packages/pathogenprofiler/fastq.py", line 54, in trim
+    run_cmd("trimmomatic PE -threads %(threads)s -phred33 %(r1)s %(r2)s -baseout %(prefix)s LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20 MINLEN:36" % vars(self))
+  File "/home/pranav1080/miniconda3/envs/tb/lib/python3.10/site-packages/pathogenprofiler/utils.py", line 557, in run_cmd
+    raise ValueError("Command Failed:\n%s\nstderr:\n%s" % (cmd,result.stderr.decode()))
+```
+## Value:
+```
+Command Failed:
+/bin/bash -c set -o pipefail; trimmomatic PE -threads 4 -phred33 reads/ERR3287819_1.fastq.gz reads/ERR3287819_2.fastq.gz -baseout /mnt/c/Users/Pranav Kumar/Documents/GitHub/TB-antimicrobial-resistance-predictor/tb-amr-predictor/93641183-33c8-478d-91ef-424808214342 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20 MINLEN:36
+stderr:
+TrimmomaticPE: Started with arguments:
+ -threads 4 -phred33 reads/ERR3287819_1.fastq.gz reads/ERR3287819_2.fastq.gz -baseout /mnt/c/Users/Pranav Kumar/Documents/GitHub/TB-antimicrobial-resistance-predictor/tb-amr-predictor/93641183-33c8-478d-91ef-424808214342 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:20 MINLEN:36
+Using templated Output files: /mnt/c/Users/Pranav_1P /mnt/c/Users/Pranav_1U /mnt/c/Users/Pranav_2P /mnt/c/Users/Pranav_2U
+Exception in thread "main" java.lang.RuntimeException: Unknown trimmer: Kumar/Documents/GitHub/TB-antimicrobial-resistance-predictor/tb-amr-predictor/93641183-33c8-478d-91ef-424808214342
+	at org.usadellab.trimmomatic.trim.TrimmerFactory.makeTrimmer(TrimmerFactory.java:68)
+	at org.usadellab.trimmomatic.Trimmomatic.createTrimmers(Trimmomatic.java:50)
+	at org.usadellab.trimmomatic.TrimmomaticPE.run(TrimmomaticPE.java:372)
+	at org.usadellab.trimmomatic.Trimmomatic.main(Trimmomatic.java:68)
+```

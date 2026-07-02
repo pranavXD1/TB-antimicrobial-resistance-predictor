@@ -223,12 +223,6 @@ def build_variants_from_vcf_dir(
 ) -> str:
     """Parse every VCF in a directory into a long variants.csv."""
     os.makedirs(out_dir, exist_ok=True)
-    if not os.path.isdir(vcf_dir):
-        raise SystemExit(
-            f"VCF directory not found: '{vcf_dir}'.\n"
-            "Download the CRyPTIC VCFs first (browse the reuse/ directory in a "
-            "browser), then pass the real unpacked folder path to --vcf-dir."
-        )
     vcfs = [f for f in os.listdir(vcf_dir) if f.endswith((".vcf", ".vcf.gz"))]
     if not vcfs:
         raise FileNotFoundError(f"No .vcf/.vcf.gz files in {vcf_dir}")

@@ -4,6 +4,7 @@ seed: 42
 # Data: point this at data/sample (synthetic) for dev, or data/processed once
 # the real CRyPTIC/NCBI data has been downloaded & built.
 data_dir: data/sample
+sample_dir: data/sample   # the ONLY dir the pipeline will auto-fill with synthetic data
 models_dir: models
 reports_dir: reports
 

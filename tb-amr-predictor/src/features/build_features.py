@@ -77,6 +77,35 @@ def available_drugs(data_dir: str) -> list[str]:
     return sorted(raw["phenotypes"]["drug"].unique())
 
 
+def label_matrix(
+    data_dir: str, drugs: list[str] | None = None, X_full: pd.DataFrame | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame, list[str]]:
+    """
+    Build (X, Y, drugs) for multi-task learning.
+
+    X : binary mutation matrix for every isolate that has >=1 phenotype.
+    Y : wide label matrix (isolates x drugs), 1=R, 0=S, NaN where untested.
+        The NaNs are the point: CRyPTIC (and the synthetic set) don't test every
+        isolate for every drug, so the multi-task loss must be *masked*.
+    """
+    raw = load_raw(data_dir)
+    if X_full is None:
+        X_full = mutation_matrix(raw["variants"])
+    ph = raw["phenotypes"]
+    drugs = drugs or sorted(ph["drug"].unique())
+
+    wide = (
+        ph[ph["drug"].isin(drugs)]
+        .assign(y=lambda d: d["phenotype"].map({"R": 1, "S": 0}))
+        .pivot_table(index="isolate_id", columns="drug", values="y", aggfunc="max")
+        .reindex(columns=drugs)
+    )
+    common = X_full.index.intersection(wide.index)
+    X = X_full.loc[common]
+    Y = wide.loc[common]
+    return X, Y, drugs
+
+
 if __name__ == "__main__":
     import argparse
 
