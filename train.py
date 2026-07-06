@@ -21,6 +21,7 @@ import json
 import joblib
 import numpy as np
 import pandas as pd
+from scipy.sparse import csr_matrix
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from xgboost import XGBClassifier
@@ -56,7 +57,7 @@ def train_drug(
     )
 
     baseline = LogisticRegression(max_iter=2000, class_weight="balanced", C=1.0)
-    baseline.fit(X_tr, y_tr)
+    baseline.fit(csr_matrix(X_tr.values), y_tr)
 
     spw = float((y_tr == 0).sum() / max((y_tr == 1).sum(), 1))
     model = _xgb(spw, xgb_params)
@@ -66,7 +67,7 @@ def train_drug(
         "drug": drug, "skipped": False, "features": features,
         "baseline": baseline, "model": model,
         "X_test": X_te, "y_test": y_te,
-        "p_baseline": baseline.predict_proba(X_te)[:, 1],
+        "p_baseline": baseline.predict_proba(csr_matrix(X_te.values))[:, 1],
         "p_model": model.predict_proba(X_te)[:, 1],
         "n_train": len(y_tr), "n_test": len(y_te), "prevalence": float(y.mean()),
     }

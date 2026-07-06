@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import csv
+import gzip
 import shutil
 import subprocess
 import argparse
@@ -47,17 +48,42 @@ def read_manifest(path: str) -> "OrderedDict[str, dict]":
     return samples
 
 
-def download(url: str, dest_dir: str) -> str:
+def _valid_gzip(path: str) -> bool:
+    """True if path is a complete, readable gzip (catches truncated downloads)."""
+    try:
+        with gzip.open(path, "rb") as f:
+            while f.read(1 << 20):
+                pass
+        return True
+    except Exception:
+        return False
+
+
+def download(url: str, dest_dir: str, retries: int = 3) -> str:
     os.makedirs(dest_dir, exist_ok=True)
     dest = os.path.join(dest_dir, url.split("/")[-1])
-    if os.path.exists(dest):
+    is_gz = dest.endswith(".gz")
+    # reuse an existing file only if it's actually complete
+    if os.path.exists(dest) and (not is_gz or _valid_gzip(dest)):
         return dest
-    with requests.get(url, stream=True, timeout=300) as r:
-        r.raise_for_status()
-        with open(dest, "wb") as f:
-            for chunk in r.iter_content(1 << 20):
-                f.write(chunk)
-    return dest
+    last = None
+    for _ in range(retries):
+        tmp = dest + ".part"
+        try:
+            with requests.get(url, stream=True, timeout=300) as r:
+                r.raise_for_status()
+                with open(tmp, "wb") as f:
+                    for chunk in r.iter_content(1 << 20):
+                        f.write(chunk)
+            if is_gz and not _valid_gzip(tmp):
+                raise ValueError("incomplete/corrupt gzip after download")
+            os.replace(tmp, dest)  # atomic: a partial never lands at the real name
+            return dest
+        except Exception as e:
+            last = e
+            if os.path.exists(tmp):
+                os.remove(tmp)
+    raise RuntimeError(f"download failed after {retries} attempts: {url} ({last})")
 
 
 def profile_cmd(sample: str, reads: list[str], results_dir: str, threads: int) -> list[str]:
@@ -117,11 +143,14 @@ def main() -> None:
                 "(or add --dry-run to preview the commands without it.)"
             )
 
-    print(f"{len(items)} sample(s) to process "
-          f"(of {len(samples)} in manifest; resumable)")
+    already = sum(1 for s, _ in items
+                  if os.path.exists(os.path.join(json_dir, f"{s}.results.json")))
+    todo = len(items) - already
+    print(f"{len(items)} sample(s) selected: {already} already done, "
+          f"{todo} to profile (resumable)")
 
     done = ok = 0
-    for samp, info in items:
+    for i, (samp, info) in enumerate(items, 1):
         out_json = os.path.join(json_dir, f"{samp}.results.json")
         if os.path.exists(out_json):
             done += 1
@@ -135,7 +164,9 @@ def main() -> None:
         if requests is None:
             raise SystemExit("pip install requests")
         try:
+            print(f"  [{i}/{len(items)}] {samp}: downloading reads...", flush=True)
             reads = [download(u, args.reads_dir) for u in info["urls"]]
+            print(f"  [{i}/{len(items)}] {samp}: profiling...", flush=True)
             cmd = profile_cmd(samp, reads, args.results_dir, args.threads)
             subprocess.run(cmd, check=True)
             ok += 1
