@@ -236,9 +236,12 @@ def build_dataset(
     if X_full is None:
         X_full = mutation_matrix(raw["variants"])
     y = labels_for_drug(raw["phenotypes"], drug)
-    common = X_full.index.intersection(y.index)
-    X = X_full.loc[common]
-    y = y.loc[common]
+    # Keep every phenotyped isolate. Isolates with no observed variants become
+    # all-zero feature rows (valid data: e.g. wild-type pncA is genuinely
+    # susceptible) rather than being silently dropped by an inner join. For
+    # genome-wide data, where every isolate carries variants, y.index is already a
+    # subset of X_full.index, so this is identical to the previous inner join.
+    X = X_full.reindex(y.index, fill_value=0)
     return X, y, list(X.columns)
 
 
