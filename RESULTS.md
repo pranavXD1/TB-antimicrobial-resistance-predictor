@@ -43,6 +43,12 @@ of **12,288 clinical isolates**, with a decision-support frontend on top.
   MIC is far more lineage-robust (0.749 vs 0.614 grouped). The one lever that
   genuinely beats the last-line ceiling — though it's ranking skill, not a usable
   ECOFF operating point.
+- **Extended beyond the CRyPTIC plate to complete the first-line panel:**
+  pyrazinamide (**0.820**, the field's pncA ceiling) and streptomycin (**0.845**)
+  added from the GenTB matrices with no sequence download — and here **gene-burden is
+  vindicated**, with `burden::pncA` and `burden::rpsL` the top SHAP drivers. Burden
+  works exactly where the biology is a mutational sink of causal LoF variants,
+  precisely the opposite of its failure on the last-line drugs (Finding 1).
 - **A shippable decision-support app** returns a 13-drug profile with per-call SHAP,
   calibrated probabilities (Brier down up to ~87% on the rare drugs), and
   Walker-style abstention that flags "uncertain" on uncatalogued resistance-gene
@@ -463,12 +469,66 @@ variants) and drugs whose genes are untouched are unaffected.
 
 ---
 
+## Extending the panel — pyrazinamide & streptomycin (GenTB)
+
+The CRyPTIC UKMYC plate does not test pyrazinamide (it needs acidic pH the plate
+can't provide) or streptomycin, so the 13-drug models above cannot cover them. To
+complete the first-line panel, two drugs were added from an independent source: the
+GenTB / Farhat-lab per-drug genotype-phenotype matrices (github.com/farhat-lab),
+which ship as compact candidate-gene binary matrices (pncA for pyrazinamide;
+rpsL/rrs/gid for streptomycin) — no sequence download required. Because the matrix
+column names embed the H37Rv genomic position, they were reparsed into the same
+`gene@pos_ref>alt` token scheme and run through the identical pipeline.
+
+5-fold CV, `both` features (SNP + gene-burden), min_count 3:
+
+| Drug | n | %R | AUC (95% CI) | AUC logit | Sens@0.5 | Spec@0.5 | Thr for 90% sens | Spec at that thr | Brier raw→cal |
+|---|---:|---:|---|---:|---:|---:|---:|---:|---|
+| Pyrazinamide | 985 | 62% | 0.820 (0.793–0.846) | 0.834 | 0.75 | 0.837 | 0.22 | 0.291 | 0.163→0.158 |
+| Streptomycin | 1,355 | 69% | 0.845 (0.823–0.866) | 0.841 | 0.738 | 0.80 | 0.23 | 0.457 | 0.160→0.141 |
+
+- **Pyrazinamide reaches the field's known ceiling.** 0.820 matches published pncA
+  performance (structure-based ML ~0.80; pncA sequencing ~0.83) — this drug is hard
+  by nature, because resistance is driven by hundreds of individually-rare
+  loss-of-function mutations in pncA rather than a few recurrent SNPs. The
+  90%-sensitivity operating point costs heavily (specificity 0.29), the same wall
+  the WHO catalogue hits. It completes the first-line quartet (RIF/INH/EMB/**PZA**).
+- **Streptomycin is a solid second-line addition** (0.845), its cleaner rpsL K43R
+  signal giving a more usable operating point (90% sensitivity at 46% specificity,
+  PPV 0.79).
+
+**This is where gene-burden is vindicated.** SHAP ranks `burden::pncA` as the #1
+pyrazinamide driver by a ~3× margin over any individual SNP, and `burden::rpsL` (with
+`burden::rrs`, `burden::gid`, and rpsL@781687 = the canonical K43R) tops streptomycin.
+Aggregating a gene's variants into a single count is the right representation exactly
+when the gene is a *dense sink of causal loss-of-function variants* (pncA) — which is
+why burden **helps here** yet **failed on the last-line drugs** (Finding 1), where the
+causal variants are sparse and the apparent signal was lineage confounding. The
+contrast is the point: the same feature succeeds or fails according to the biology,
+and the models recovered the known resistance genetics of both drugs unaided.
+
+**Framing caveats (so these numbers aren't misread).** The GenTB matrices are
+resistance-*enriched* (~62–69% R vs the ~1–2% seen in the wild), so these AUCs are
+**not comparable** to the CRyPTIC prevalence-limited numbers and are reported
+separately, not in the main table. They are candidate-gene by construction, carry no
+isolate IDs, and use a different variant representation — so they are **standalone
+new-drug models**, not integrated with the 13, and the population-structure CV cannot
+be run on them (no genome-wide variants to cluster). They demonstrate the pipeline
+generalizes to new drugs and data; rigorous cross-cohort validation is future work.
+
+---
+
 ## Limitations
 
 - **Single data source** (CRyPTIC); no external-cohort validation. Structure-aware
   CV mitigates but does not replace this — and the field agrees it is the key gap:
   even large ensemble studies report being unable to find a suitable external
   dataset for second-line drugs.
+- **The two added drugs (pyrazinamide, streptomycin) come from a second, resistance-
+  enriched source** (GenTB) with a candidate-gene-only representation and no isolate
+  IDs. Their metrics are therefore reported separately and are not comparable to the
+  CRyPTIC prevalence-limited numbers; they are standalone models, not cross-validated
+  against population structure or pooled with the 13.
 - **Probabilities are calibrated** per drug (isotonic/Platt on out-of-fold
   predictions); the raw class-weighted scores are well-ranked but inflated, so the
   served probabilities and both threshold modes use the calibrated scale.
@@ -517,6 +577,17 @@ python -m src.models.regression_catalogue --data data/vcf_indel --catalogue data
 # 5. Calibrate the served model (writes models/calibrators.joblib), then serve
 python -m src.models.calibrate            --data data/vcf_indel
 streamlit run app.py
+
+# 6. Extend the panel with pyrazinamide + streptomycin (GenTB — no download; 1.5 MB)
+#    Input matrices: github.com/farhat-lab/gentb-site R/Neural_Network/input/{pza,str}.csv
+export TBAMR_FEATURES=both TBAMR_MIN_COUNT=3
+unset TBAMR_CANDIDATE_ONLY TBAMR_MAX_FEATURES TBAMR_GENE_PAD   # data is already candidate-gene
+python -m src.data.gentb_ingest  --input data/gentb_raw/pza.csv          # -> data/gentb_pza
+python -m src.data.gentb_ingest  --input data/gentb_raw/str.csv          # -> data/gentb_str
+python -m src.models.evaluate_cv --data data/gentb_pza --folds 5 --target-sens 0.90
+python -m src.models.train        --data data/gentb_pza --models models_gentb_pza
+python -m src.models.calibrate    --data data/gentb_pza --models models_gentb_pza
+python -m src.interpret.explain   --models models_gentb_pza --drug Pyrazinamide   # (+ str / Streptomycin)
 ```
 
 Environment: Python 3.10, scikit-learn, XGBoost, SHAP, pandas, NumPy, openpyxl,
@@ -528,9 +599,11 @@ Streamlit.
 
 1. **External validation on a non-CRyPTIC cohort** — the single highest-value
    addition and the field's acknowledged gap. Acquire a phenotyped independent
-   cohort (e.g. SRA isolates from a different geography), run variant calling from
-   raw reads, and re-predict without retraining. This is what would let the
-   generalisation claims stand unqualified.
+   cohort (e.g. a national cohort on the ENA/SRA with its own pDST), run variant
+   calling from raw reads with TB-Profiler, and re-predict with the frozen
+   candidate-gene models — no retraining. Validate against the cohort's *own*
+   phenotypes, never the WHO catalogue grades, to keep the test leakage-free. This is
+   what would let the generalisation claims stand unqualified.
 2. **Convert the MIC ranking gain into usable calls for the rarest drugs** — the MIC
    regressor's advantage on bedaquiline/clofazimine is now population-structure-verified
    (Finding 5), but it underpredicts the high-MIC tail so the ECOFF is too
@@ -543,8 +616,10 @@ Streamlit.
 
 *Completed since the first draft:* candidate-gene restriction with promoter windows
 (now the recommended model), a from-scratch regression catalogue, MIC → binary via
-ECOFF (Finding 5), per-drug probability calibration, and abstention on uncatalogued
-variants (both live in the frontend).
+ECOFF (Finding 5), per-drug probability calibration, abstention on uncatalogued
+variants (both live in the frontend), and **panel extension to pyrazinamide and
+streptomycin from the GenTB matrices** — completing the first-line quartet and
+vindicating the gene-burden feature where the biology supports it.
 
 *Deprioritised:* amino-acid-consequence-filtered burden — Findings 1–3 show the
 last-line ceiling is prevalence and confounding, not representation, so this has

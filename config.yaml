@@ -1,0 +1,25 @@
+# TB-AMR Predictor configuration
+seed: 42
+
+# Data: point this at data/sample (synthetic) for dev, or data/processed once
+# the real CRyPTIC/NCBI data has been downloaded & built.
+data_dir: data/sample
+sample_dir: data/sample   # the ONLY dir the pipeline will auto-fill with synthetic data
+models_dir: models
+reports_dir: reports
+
+# Synthetic generation
+n_isolates: 4000
+
+# Modelling
+test_size: 0.25
+
+# Drugs to model (null = all drugs found in the phenotype table).
+# First-line TB drugs first, then second-line.
+drugs: null
+
+# XGBoost overrides (merged onto sensible defaults in src/models/train.py)
+xgb_params:
+  n_estimators: 300
+  max_depth: 4
+  learning_rate: 0.05

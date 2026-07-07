@@ -127,8 +127,8 @@ Two findings worth noting, both true of real TB-AMR:
 ## Roadmap
 
 - [x] **Phase 0 — Foundation.** Scaffold, source-agnostic pipeline, baseline + XGBoost, clinical metrics, SHAP interpretability, running end-to-end on synthetic data.
-- [ ] **Phase 1 — Real data.** Ingest CRyPTIC + WHO catalogue; normalise mutation nomenclature; reproduce per-drug performance; benchmark against the WHO rule-based catalogue.
-- [ ] **Phase 2 — A model that stretches me.** A single **multi-task** model predicting all drugs jointly (sharing signal across co-resistant drugs), and a **catalogue-free representation** (k-mer / learned mutation embeddings) so the model can find resistance signal beyond the known catalogue — the genuinely new technique vs. my HOPV work.
+- [~] **Phase 1 — real data (in progress).** Phenotypes for 12,280 isolates downloaded (`download.py phenotypes`). Variant tooling ready: `make_subset` (balanced per-drug subset + accessions) → `ena_fetch` (sample → run → FASTQ URLs) → TB-Profiler → `tbprofiler_aggregate` (gene-level `variants.csv` + lineages). Next: profile a subset, reproduce per-drug performance, and benchmark against the WHO catalogue.
+- [~] **Phase 2 — a model that stretches me (in progress).** Built: a shared-trunk **multi-task** network (`src/models/multitask.py`) predicting all drugs jointly with a **masked loss** that ignores untested isolate×drug pairs, evaluated apples-to-apples against the per-drug XGBoost baseline on a shared split. Run: `python -m src.models.multitask --device cuda`. Next: a **catalogue-free k-mer / learned-embedding representation** so the model can find resistance signal beyond known mutations — the genuinely new technique vs. my HOPV work.
 - [ ] **Phase 3 — Clinical decision-support layer.** Per-isolate report: predicted regimen, the mutations behind each call, calibrated confidence, and a flag when a call rests on novel/uncatalogued variants.
 - [ ] **Phase 4 — Deployment.** A web app: upload a variant profile → per-drug R/S with explanations; containerised, with model versioning and drift monitoring.
 

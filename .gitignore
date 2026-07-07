@@ -1,0 +1,28 @@
+# Data (don't commit raw genomes / large processed matrices)
+data/raw/*
+data/processed/*
+!data/.gitkeep
+
+# Keep the synthetic sample tiny & reproducible -> regenerate instead of commit
+data/sample/*.csv
+
+# Trained artefacts
+models/
+reports/*.png
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+reads/
+results/
+results_*/
+*.fastq.gz
+*.fq.gz
+*.bam
+*.bam.bai
+*.cram
+*.vcf.gz
+*.duckdb
+*.duckdb.wal
