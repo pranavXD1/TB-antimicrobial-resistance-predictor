@@ -1,0 +1,2 @@
+Drug,n,%R,k,AUC_xgb,CI_low,CI_high,AUC_cv_mean,AUC_cv_sd,AUC_logit,Sens@.5,Spec@.5,Thr@90,Sens@thr,Spec@thr,PPV@thr
+Streptomycin,1355,69,5,0.845,0.823,0.866,0.848,0.021,0.841,0.738,0.8,0.232,0.91,0.457,0.792

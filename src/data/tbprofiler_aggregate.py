@@ -52,18 +52,40 @@ def _first(d: dict, *keys):
     return None
 
 
-def variants_from_json(obj: dict) -> tuple[str, list[str], str | None]:
-    """Return (sample_id, [mutation_tokens], lineage) from one TB-Profiler result."""
+def _coord_token(v: dict):
+    """CRyPTIC-style genomic token g<pos>_<ref>><alt> from a TB-Profiler variant."""
+    pos = _first(v, "pos", "genome_pos")
+    ref, alt = v.get("ref"), v.get("alt")
+    if pos is None or not ref or not alt:
+        return None            # structural variants / missing coords -> no coord token
+    return f"g{pos}_{ref}>{alt}"
+
+
+def variants_from_json(obj: dict, token_format: str = "gene") -> tuple[str, list[str], str | None]:
+    """Return (sample_id, [mutation_tokens], lineage) from one TB-Profiler result.
+
+    token_format='gene'  -> gene_change tokens (rpoB_S450L), interpretable.
+    token_format='coord' -> g<pos>_<ref>><alt> tokens matching the CRyPTIC vocabulary,
+                            required to score frozen CRyPTIC models on external isolates.
+    Only 'pass' calls from dr_variants + other_variants are used; qc_fail_variants and
+    any soft/hard-failed call are excluded.
+    """
     sample = _first(obj, "id", "sample_name", "sample") or "unknown"
     tokens: list[str] = []
-    # different TB-Profiler versions store variants under different keys
-    for key in ("dr_variants", "other_variants", "variants", "qc_variants"):
+    for key in ("dr_variants", "other_variants", "variants"):   # NB: never qc_fail_variants
         for v in (obj.get(key) or []):
-            gene = _first(v, "gene", "gene_name", "locus_tag")
-            change = _first(v, "change", "protein_change", "hgvs_p",
-                            "nucleotide_change", "hgvs_c")
-            if gene and change:
-                tokens.append(f"{gene}_{normalize_change(change)}")
+            if str(v.get("filter", "pass")).lower() not in ("", "pass"):
+                continue                                        # drop soft_fail / hard_fail
+            if token_format == "coord":
+                tok = _coord_token(v)
+                if tok:
+                    tokens.append(tok)
+            else:
+                gene = _first(v, "gene", "gene_name", "locus_tag")
+                change = _first(v, "change", "protein_change", "hgvs_p",
+                                "nucleotide_change", "hgvs_c")
+                if gene and change:
+                    tokens.append(f"{gene}_{normalize_change(change)}")
     lineage = _first(obj, "main_lineage", "lineage", "sublin", "main_lin")
     return sample, sorted(set(tokens)), lineage
 
@@ -101,13 +123,14 @@ def load_manifest_bridge(path: str) -> dict:
     return {}
 
 
-def aggregate(json_dir: str, out_dir: str, id_map: dict[str, str] | None = None) -> dict[str, str]:
+def aggregate(json_dir: str, out_dir: str, id_map: dict[str, str] | None = None,
+              token_format: str = "gene") -> dict[str, str]:
     os.makedirs(out_dir, exist_ok=True)
     files = sorted(glob.glob(os.path.join(json_dir, "*.json")))
     if not files:
         raise SystemExit(f"No .json files in {json_dir}. Profile genomes first "
                          "with `tb-profiler profile ... --dir {json_dir}`.")
-    print(f"  aggregating {len(files):,} TB-Profiler result files")
+    print(f"  aggregating {len(files):,} TB-Profiler result files  (token_format={token_format})")
 
     def remap(s):
         return id_map.get(s, s) if id_map else s
@@ -119,7 +142,7 @@ def aggregate(json_dir: str, out_dir: str, id_map: dict[str, str] | None = None)
         except Exception as e:
             print(f"  [warn] {os.path.basename(f)}: {e}")
             continue
-        sample, toks, lineage = variants_from_json(obj)
+        sample, toks, lineage = variants_from_json(obj, token_format=token_format)
         if id_map and sample not in id_map:
             unmapped += 1
         sample = remap(sample)
@@ -154,6 +177,9 @@ def main() -> None:
                     help="reuse table or 2-col file to remap accession -> UNIQUEID")
     ap.add_argument("--manifest", default="data/processed/fastq_manifest.tsv",
                     help="ENA manifest, used to bridge SAMEA <-> queried accession")
+    ap.add_argument("--token-format", choices=["gene", "coord"], default="gene",
+                    help="gene = rpoB_S450L (interpretable); coord = g<pos>_<ref>><alt> "
+                         "(matches CRyPTIC vocabulary, for external validation)")
     args = ap.parse_args()
     id_map = load_id_map(args.id_map) if args.id_map and os.path.exists(args.id_map) else None
     if id_map:
@@ -167,7 +193,7 @@ def main() -> None:
                 added += 1
         print(f"  loaded id map ({len(id_map):,} entries"
               + (f", +{added:,} bridged via manifest" if added else "") + ")")
-    aggregate(args.json_dir, args.out, id_map=id_map)
+    aggregate(args.json_dir, args.out, id_map=id_map, token_format=args.token_format)
     print("\nNext: python run_pipeline.py --data", args.out,
           "   (and python -m src.models.multitask --data", args.out + ")")
 

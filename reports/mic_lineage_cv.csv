@@ -1,0 +1,14 @@
+Drug,n,%R,MIC_AUC_random,MIC_AUC_grouped,drop
+Isoniazid,9519,47,0.978,0.968,0.01
+Rifampicin,8955,39,0.976,0.97,0.006
+Rifabutin,10042,32,0.974,0.965,0.008
+Ethambutol,6614,22,0.965,0.958,0.007
+Ethionamide,8251,14,0.95,0.939,0.011
+Moxifloxacin,6785,15,0.929,0.926,0.004
+Amikacin,8973,7,0.925,0.924,0.001
+Levofloxacin,7774,15,0.919,0.92,-0.001
+Kanamycin,9333,8,0.913,0.898,0.015
+Bedaquiline,8536,1,0.87,0.802,0.068
+Clofazimine,7763,1,0.807,0.749,0.058
+Linezolid,7141,1,0.724,0.714,0.011
+Delamanid,11926,2,0.65,0.633,0.017

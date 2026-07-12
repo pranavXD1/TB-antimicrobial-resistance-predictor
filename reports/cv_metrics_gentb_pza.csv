@@ -1,0 +1,2 @@
+Drug,n,%R,k,AUC_xgb,CI_low,CI_high,AUC_cv_mean,AUC_cv_sd,AUC_logit,Sens@.5,Spec@.5,Thr@90,Sens@thr,Spec@thr,PPV@thr
+Pyrazinamide,985,62,5,0.82,0.793,0.846,0.832,0.02,0.834,0.75,0.837,0.221,0.917,0.291,0.679
