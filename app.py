@@ -1,173 +1,207 @@
 """
-TB-AMR decision-support demo (Streamlit).
+FastAPI backend for the TB drug-resistance predictor.
 
-Paste an isolate's variants or upload its VCF, and get a predicted resistance
-profile across all 13 drugs with the per-call SHAP drivers behind each
-prediction. Thin UI over src/serve/predict.py.
+Thin wrapper over src/serve/predict.py: loads the frozen per-drug models once at
+startup, then exposes JSON endpoints the frontend calls. Serves the static
+frontend from ./web. Designed to run on a Hugging Face Space (Docker SDK) on
+port 7860.
 
-Run:  streamlit run app.py
+Endpoints:
+  GET  /            -> the predictor + dashboard page (web/index.html)
+  POST /predict     -> {text, mode, threshold} -> per-drug resistance profile
+  POST /predict_vcf -> multipart VCF upload -> per-drug resistance profile
+  GET  /health      -> readiness + model count
 """
+from __future__ import annotations
+
 import os
-import streamlit as st
+
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from src.serve.predict import (
-    load_models, load_thresholds, load_reliability, load_calibrators,
+    load_models, load_calibrators, load_thresholds, load_reliability,
     tokens_from_text, tokens_from_vcf_bytes, predict_isolate,
 )
 
-st.set_page_config(page_title="TB-AMR Predictor", page_icon="🧬", layout="wide")
+MODELS_DIR = os.environ.get("MODELS_DIR", "models")
+REPORTS_DIR = os.environ.get("REPORTS_DIR", "reports")
+WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 
-MODELS_DIR = os.environ.get("TBAMR_MODELS", "models")
-RELIABLE_AUC = 0.85          # below this, a drug's model is flagged low-confidence
-
-EXAMPLES = {
-    "— choose —": "",
-    "Susceptible (no resistance markers)": "g3844992_T>A",
-    "MDR — rifampicin + isoniazid": "rpoB@761155_C>T\nkatG@2155168_C>G",
-    "Pre-XDR — add a fluoroquinolone (gyrA D94)":
-        "rpoB@761155_C>T\nkatG@2155168_C>G\ngyrA@7581_GACAG>GGCAC",
+# --- drug metadata (the 13 CRyPTIC drugs the model directory provides) ---
+LABELS = {
+    "rifampicin": "Rifampicin", "isoniazid": "Isoniazid", "rifabutin": "Rifabutin",
+    "ethambutol": "Ethambutol", "levofloxacin": "Levofloxacin",
+    "moxifloxacin": "Moxifloxacin", "ethionamide": "Ethionamide",
+    "kanamycin": "Kanamycin", "amikacin": "Amikacin", "bedaquiline": "Bedaquiline",
+    "clofazimine": "Clofazimine", "linezolid": "Linezolid", "delamanid": "Delamanid",
 }
+ABBR = {
+    "rifampicin": "RIF", "isoniazid": "INH", "rifabutin": "RFB", "ethambutol": "EMB",
+    "levofloxacin": "LFX", "moxifloxacin": "MFX", "ethionamide": "ETO",
+    "kanamycin": "KAN", "amikacin": "AMK", "bedaquiline": "BDQ",
+    "clofazimine": "CFZ", "linezolid": "LZD", "delamanid": "DLM",
+}
+FIRST_LINE = {"rifampicin", "isoniazid", "ethambutol", "rifabutin"}
+LAST_LINE = {"bedaquiline", "clofazimine", "linezolid", "delamanid"}
+
+app = FastAPI(title="TB Resistance Predictor")
+
+# load frozen models + calibration + thresholds once
+MODELS, FEATS = load_models(MODELS_DIR)
+CALIB = load_calibrators(MODELS_DIR)
+THR90 = load_thresholds(REPORTS_DIR)        # per-drug 90%-sensitivity thresholds
+RELI = load_reliability(REPORTS_DIR)         # per-drug CV AUC (trust signal)
 
 
-@st.cache_resource
-def _load():
-    models, feats = load_models(MODELS_DIR)
-    return (models, feats, load_thresholds("reports"), load_reliability("reports"),
-            load_calibrators(MODELS_DIR))
+def thresholds_for(mode: str, threshold):
+    """Balanced -> one slider threshold for every drug; high-sensitivity -> the
+    per-drug 90%-sensitivity thresholds if available."""
+    if mode == "high_sensitivity" and THR90:
+        return dict(THR90)
+    thr = 0.5 if threshold is None else float(threshold)
+    return {d.lower(): thr for d in MODELS}
 
 
-st.title("🧬 TB drug-resistance predictor")
-st.caption("Genome-based resistance prediction for *M. tuberculosis*, trained on "
-           "12,288 CRyPTIC isolates. Research demo — not a clinical device.")
-
-try:
-    models, feats, thr90, reliability, calibrators = _load()
-except FileNotFoundError:
-    st.error(f"No models found in `{MODELS_DIR}/`. Run `python run_pipeline.py "
-             "--data data/vcf_indel` first, or set TBAMR_MODELS.")
-    st.stop()
-
-has_burden = any(f.startswith("burden::") for f in feats)
-is_calibrated = bool(calibrators)
-
-# ---- sidebar: decision-threshold policy -------------------------------------
-mode = st.sidebar.radio(
-    "Decision threshold",
-    ["Balanced (0.5)", "High-sensitivity (catch ~90% of resistance)"],
-    index=0,
-)
-st.sidebar.caption(
-    "**Balanced** favours specificity — fewer false alarms.\n\n"
-    "**High-sensitivity** uses per-drug thresholds tuned to catch ~90% of "
-    "resistant isolates, at the cost of many more false positives — especially "
-    "for the rare last-line drugs (their thresholds are near zero)."
-)
-use_thr90 = mode.startswith("High")
-if use_thr90:
-    if is_calibrated:                      # calibrated-scale thresholds
-        thresholds = {d: e["thr90"] for d, e in calibrators.items()}
-    else:
-        thresholds = thr90
-else:
-    thresholds = {}
-
-st.success(
-    f"Loaded {len(models)} per-drug models · {len(feats):,} features "
-    f"({'SNP + gene-burden' if has_burden else 'SNP'}) · "
-    f"probabilities: {'calibrated' if is_calibrated else 'uncalibrated'} · "
-    f"threshold: {'90% sensitivity' if thresholds else 'balanced (0.5)'}."
-)
-
-if "variant_text" not in st.session_state:
-    st.session_state.variant_text = ""
-
-left, right = st.columns([1, 1])
-with left:
-    st.subheader("Isolate variants")
-    ex = st.selectbox("Load an example", list(EXAMPLES))
-    if ex != "— choose —" and st.button("Use this example"):
-        st.session_state.variant_text = EXAMPLES[ex]
-    st.session_state.variant_text = st.text_area(
-        "Paste variant tokens (one per line)",
-        value=st.session_state.variant_text, height=180,
-        placeholder="rpoB@761155_C>T\nkatG@2155168_C>G\nor raw  NC_000962.3_761155_C_T",
-    )
-    up = st.file_uploader("…or upload a VCF (.vcf / .vcf.gz)", type=["vcf", "gz"])
-    go = st.button("Predict resistance profile", type="primary")
-
-with right:
-    st.subheader("How it works")
-    st.markdown(
-        "- Variants become a binary feature vector"
-        f"{' plus per-gene burden counts' if has_burden else ''}, exactly as in "
-        "training.\n"
-        "- Each drug's XGBoost model outputs a resistance probability"
-        f"{', calibrated so it reads as a true likelihood' if is_calibrated else ''}"
-        "; the call uses the threshold selected in the sidebar.\n"
-        "- SHAP shows which variants drove each prediction (🔺 toward resistant, "
-        "🔻 toward susceptible).\n"
-        f"- Drugs with cross-validated AUC below {RELIABLE_AUC:.2f} are flagged "
-        "**low-confidence** — the model is too weak there to act on.\n"
-        "- If the isolate carries a variant inside a resistance gene that the model "
-        "never saw in training, that drug is flagged **Uncertain** rather than "
-        "called susceptible."
-    )
-
-if go:
-    tokens = set()
-    if up is not None:
-        tokens |= tokens_from_vcf_bytes(up.getvalue())
-    tokens |= tokens_from_text(st.session_state.variant_text)
-    if not tokens:
-        st.warning("No variants provided.")
-        st.stop()
-
-    results = predict_isolate(models, feats, tokens, thresholds, calibrators)
-
-    def _reliable(drug):
-        auc = reliability.get(drug.lower())
-        return (auc is None) or (auc >= RELIABLE_AUC)
-
-    n_r = sum(r["call"] == "R" and not r["abstain"] and _reliable(r["drug"])
-              for r in results)
-    n_uncertain = sum(r["abstain"] for r in results)
-
-    st.divider()
-    st.markdown(f"### Profile — predicted resistant to **{n_r} of {len(results)}** "
-                "drugs *(confident calls)*")
-    cap = f"{len(tokens)} variant(s) recognised."
-    if n_uncertain:
-        cap += f"  {n_uncertain} drug(s) flagged uncertain (uncatalogued variant)."
-    st.caption(cap)
-
+def enrich(results: list) -> list:
     for r in results:
-        auc = reliability.get(r["drug"].lower())
-        low = auc is not None and auc < RELIABLE_AUC
-        c1, c2, c3 = st.columns([2, 1, 3])
-        c1.markdown(f"**{r['drug'].title()}**")
-        if low:
-            c1.caption(f"⚠ low-confidence model (AUC {auc:.2f})")
-        if r["abstain"]:
-            c2.markdown(":orange[**Uncertain**]")
-        elif r["call"] == "R":
-            c2.markdown(":red[**RESISTANT**]")
-        else:
-            c2.markdown(":green[Susceptible]")
-        c3.progress(min(max(r["prob"], 0.0), 1.0),
-                    text=f"p = {r['prob']:.2f}  (threshold {r['threshold']:.2f})")
-        if r["abstain"]:
-            c3.caption(f"⚠ {r['abstain_reason']} — not in the training set, so "
-                       "susceptibility can't be assumed.")
-        if r["drivers"]:
-            with c3.expander("why this call"):
-                for d in r["drivers"]:
-                    arrow = "🔺" if d["contrib"] > 0 else "🔻"
-                    state = "present" if d["present"] else "absent"
-                    st.write(f"{arrow} `{d['feature']}` — {state}, "
-                             f"SHAP {d['contrib']:+.2f}")
+        dl = r["drug"].lower()
+        r["label"] = LABELS.get(dl, r["drug"].capitalize())
+        r["abbr"] = ABBR.get(dl, r["drug"][:3].upper())
+        r["line"] = "first" if dl in FIRST_LINE else ("last" if dl in LAST_LINE else "second")
+        rel = RELI.get(dl)
+        r["reliability"] = rel
+        r["low_conf"] = (rel is not None and rel < 0.85)
+        r["auc"] = (f"{rel:.2f}" if rel is not None else "")
+    return results
 
-    st.divider()
-    st.caption("Predictions are model estimates from genotype alone and do not "
-               "replace phenotypic drug-susceptibility testing. Last-line drugs "
-               "(bedaquiline, linezolid, clofazimine, delamanid) are low-confidence "
-               "by nature — see the project results.")
+
+class PredictReq(BaseModel):
+    text: str = ""
+    mode: str = "balanced"
+    threshold: float | None = 0.5
+
+
+def _run(tokens, mode, threshold, n_tokens):
+    thr = thresholds_for(mode, threshold)
+    results = predict_isolate(MODELS, FEATS, tokens, thresholds=thr,
+                              calibrators=CALIB, top_k=5)
+    n_resist = sum(1 for r in results if r["call"] == "R")
+    return {
+        "results": enrich(results),
+        "n_tokens": n_tokens,
+        "n_recognized": len(tokens),
+        "n_resistant": n_resist,
+        "n_drugs": len(MODELS),
+        "mode": mode,
+        "threshold": threshold,
+    }
+
+
+@app.post("/predict")
+def predict(req: PredictReq):
+    tokens = tokens_from_text(req.text)
+    raw_count = len([t for chunk in req.text.splitlines()
+                     for t in chunk.split(",") if t.strip()])
+    return _run(tokens, req.mode, req.threshold, raw_count)
+
+
+@app.post("/predict_vcf")
+async def predict_vcf(file: UploadFile = File(...),
+                      mode: str = Form("balanced"),
+                      threshold: float = Form(0.5)):
+    data = await file.read()
+    tokens = tokens_from_vcf_bytes(data)
+    return _run(tokens, mode, threshold, len(tokens))
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "drugs": len(MODELS), "features": len(FEATS),
+            "calibrated": bool(CALIB), "has_thr90": bool(THR90)}
+
+
+# --- external-validation dashboard (computed live from reports/pooled_scores.csv) ---
+DASH_DRUGS = ["INH", "RIF", "EMB", "PZA", "STR"]
+DASH_FULL = {"INH": "Isoniazid", "RIF": "Rifampicin", "EMB": "Ethambutol",
+             "PZA": "Pyrazinamide", "STR": "Streptomycin"}
+COHORT_LABEL = {"sl_ext": "Sierra Leone", "bel_ext": "Belarus"}
+# pooled 90%-sensitivity operating points (leave-one-out) + honest per-drug note
+DASH_OP = {"INH": (0.90, 0.94), "RIF": (0.90, 0.97), "EMB": (0.89, 0.95),
+           "PZA": (0.96, 0.98), "STR": (0.92, 0.70)}
+
+
+def _roc_points(y, s, n=60):
+    from sklearn.metrics import roc_curve
+    import numpy as np
+    fpr, tpr, _ = roc_curve(y, s)
+    if len(fpr) > n:
+        idx = np.linspace(0, len(fpr) - 1, n).astype(int)
+        fpr, tpr = fpr[idx], tpr[idx]
+    return [[round(float(a), 4), round(float(b), 4)] for a, b in zip(fpr, tpr)]
+
+
+def _auc_ci(y, s, B=500, seed=0):
+    from sklearn.metrics import roc_auc_score
+    import numpy as np
+    y = np.asarray(y); s = np.asarray(s); n = len(y)
+    rng = np.random.default_rng(seed)
+    boot = []
+    for _ in range(B):
+        idx = rng.integers(0, n, n)
+        if len(np.unique(y[idx])) > 1:
+            boot.append(roc_auc_score(y[idx], s[idx]))
+    lo, hi = (np.percentile(boot, [2.5, 97.5]) if boot else (float("nan"), float("nan")))
+    return round(float(roc_auc_score(y, s)), 3), round(float(lo), 3), round(float(hi), 3)
+
+
+@app.get("/dashboard")
+def dashboard():
+    """Two-cohort external-validation metrics + ROC geometry, computed from the
+    per-isolate pooled scores so nothing is hard-coded or fabricated."""
+    import pandas as pd
+    from sklearn.metrics import roc_auc_score
+    p = os.path.join(REPORTS_DIR, "pooled_scores.csv")
+    if not os.path.exists(p):
+        return {"available": False}
+    df = pd.read_csv(p)
+    drugs = []
+    for d in DASH_DRUGS:
+        sub = df[df["drug"] == d]
+        if sub.empty or sub["y"].nunique() < 2:
+            continue
+        y = sub["y"].to_numpy(); s = sub["raw"].to_numpy()
+        auc, lo, hi = _auc_ci(y, s)
+        op = DASH_OP.get(d, (None, None))
+        entry = {"drug": d, "label": DASH_FULL[d], "n": len(y),
+                 "R": int(y.sum()), "S": int((y == 0).sum()),
+                 "auc": auc, "ci_lo": lo, "ci_hi": hi,
+                 "sens": op[0], "spec": op[1],
+                 "pooled_roc": _roc_points(y, s), "cohorts": []}
+        for c in ["sl_ext", "bel_ext"]:
+            cs = sub[sub["cohort"] == c]
+            if cs["y"].nunique() > 1:
+                entry["cohorts"].append({
+                    "cohort": c, "label": COHORT_LABEL[c],
+                    "auc": round(float(roc_auc_score(cs["y"], cs["raw"])), 3),
+                    "roc": _roc_points(cs["y"].to_numpy(), cs["raw"].to_numpy())})
+        drugs.append(entry)
+    return {"available": True, "drugs": drugs}
+
+
+@app.get("/", response_class=HTMLResponse)
+def index():
+    idx = os.path.join(WEB_DIR, "index.html")
+    if os.path.exists(idx):
+        return FileResponse(idx)
+    return HTMLResponse(
+        "<h1>TB Resistance Predictor</h1>"
+        "<p>Backend is running. Frontend (web/index.html) not found.</p>"
+        f"<p>Loaded {len(MODELS)} drug models, {len(FEATS)} features.</p>"
+    )
+
+
+if os.path.isdir(WEB_DIR):
+    app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")

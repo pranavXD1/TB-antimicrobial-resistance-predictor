@@ -1,28 +1,32 @@
-# Data (don't commit raw genomes / large processed matrices)
-data/raw/*
-data/processed/*
-!data/.gitkeep
-
-# Keep the synthetic sample tiny & reproducible -> regenerate instead of commit
-data/sample/*.csv
-
-# Trained artefacts
-models/
-reports/*.png
-
-# Python
-__pycache__/
-*.pyc
-.venv/
-.ipynb_checkpoints/
+# ---- Large / regenerable data (obtain via DATA.md or Zenodo) ----
+data/vcf/variants.csv
+data/vcf_indel/variants.csv
+data/*.duckdb
 reads/
-results/
 results_*/
+*.fastq
 *.fastq.gz
-*.fq.gz
 *.bam
-*.bam.bai
+*.bai
 *.cram
-*.vcf.gz
-*.duckdb
-*.duckdb.wal
+models/
+!models_gentb_pza/
+!models_gentb_str/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ---- scratch ----
+data/*_supp/*.zip
