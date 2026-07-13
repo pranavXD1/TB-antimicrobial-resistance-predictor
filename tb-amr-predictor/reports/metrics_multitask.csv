@@ -1,7 +1,0 @@
-Drug,n_test,%R,AUC (xgb),AUC (multitask),Sens (mt),Spec (mt),delta
-Ethionamide,12,17%,,0.75,0.5,0.6,
-Rifabutin,12,92%,,0.727,1.0,0.0,
-Levofloxacin,11,36%,,0.571,0.25,0.571,
-Moxifloxacin,10,30%,,0.476,0.333,0.571,
-Ethambutol,9,67%,,0.389,1.0,0.0,
-Kanamycin,10,10%,,0.0,0.0,1.0,
